@@ -1,3 +1,6 @@
+from hash import Hash
+
+
 class Nodo:
     def __init__(self, clave, valor):
         self.clave = clave
@@ -7,11 +10,13 @@ class Nodo:
 
 class TablaHashEncadenamiento:
     def __init__(self, tamaño=101):
+        self.valor_hash = Hash()
         self.tamaño = tamaño
         self.tabla = [None] * tamaño
 
     def _hash(self, clave):
-        return hash(clave) % self.tamaño
+        hash_int = int(clave, 16)
+        return hash_int % self.tamaño
 
     def insertar(self, clave, valor):
         indice = self._hash(clave)
@@ -58,3 +63,15 @@ class TablaHashEncadenamiento:
             prev = nodo
             nodo = nodo.siguiente
         return False
+
+    def todos_valores(self):
+        valores = []
+        for i in range(self.tamaño):
+            actual = self.tabla[i]
+            while actual:
+                valores.append(actual.valor)
+                actual = actual.siguiente
+        return valores
+
+    def existe(self, clave):
+        return self.buscar(clave) is not None

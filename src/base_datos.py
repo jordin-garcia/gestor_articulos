@@ -1,15 +1,18 @@
 import os
 from tabla_hash import TablaHashEncadenamiento
+from articulo import Articulo
+from manejo_archivos import ManejoArchivos
+
 
 class BaseDatos:
-    def __init__(self, archivo="articulos_db.txt"):
-        self.archivo = archivo
+    def __init__(self, archivo="data/articulos_db.txt"):
         self.tabla = TablaHashEncadenamiento()
+        self.manejo = ManejoArchivos()
+        self.archivo = archivo
         self.cargar_datos()
 
     def cargar_datos(self):
         if not os.path.exists(self.archivo):
-            open(self.archivo, "w").close()
             return
 
         with open(self.archivo, "r", encoding="utf-8") as f:
@@ -18,40 +21,79 @@ class BaseDatos:
                 if not linea:
                     continue
                 try:
-                    clave, titulo, autor, año, archivo = linea.split("|")
-                    self.tabla.insertar(clave, {
-                        "titulo": titulo,
-                        "autor": autor,
-                        "año": año,
-                        "archivo": archivo
-                    })
+                    articulo = Articulo.crear_desde_string_db(linea)
+                    self.tabla.insertar(articulo.hash_contenido, articulo)
                 except ValueError:
                     print(f"[Error] Línea inválida: {linea}")
 
-    def sincronizar(self):
+    def existe(self, hash_contenido):
+        return self.tabla.existe(hash_contenido)
+
+    def guardar_en_archivo(self, articulo):
+        with open(self.archivo, "a", encoding="utf-8") as f:
+            f.write(articulo.convertir_a_string_db() + "\n")
+
+    def insertar(self, articulo):
+        if self.tabla.existe(articulo.hash_contenido):
+            return "Artículo ya existe"
+
+        self.tabla.insertar(articulo.hash_contenido, articulo)
+        self.guardar_en_archivo(articulo)
+        return "Artículo guardado"
+
+    def buscar(self, hash_contenido):
+        return self.tabla.buscar(hash_contenido)
+
+    def reescribir_archivo(self):
         with open(self.archivo, "w", encoding="utf-8") as f:
-            for indice in self.tabla.tabla:
-                nodo = indice
-                while nodo:
-                    clave = nodo.clave
-                    datos = nodo.valor
-                    f.write(f"{clave}|{datos['titulo']}|{datos['autor']}|{datos['año']}|{datos['archivo']}\n")
-                    nodo = nodo.siguiente
+            for articulo in self.tabla.todos_valores():
+                f.write(articulo.convertir_a_string_db() + "\n")
 
-    def agregar(self, clave, titulo, autor, año, archivo):
-        self.tabla.insertar(clave, {
-            "titulo": titulo,
-            "autor": autor,
-            "año": año,
-            "archivo": archivo
-        })
-        self.sincronizar()
+    def eliminar(self, hash_contenido):
+        articulo = self.tabla.buscar(hash_contenido)
+        if not articulo:
+            return "Artículo no encontrado"
 
-    def buscar(self, clave):
-        return self.tabla.buscar(clave)
+        self.tabla.eliminar(hash_contenido)
+        self.manejo.eliminar_archivo_por_hash(hash_contenido)
+        self.reescribir_archivo()
 
-    def eliminar(self, clave):
-        if self.tabla.eliminar(clave):
-            self.sincronizar()
-            return True
-        return False
+        return "Artículo eliminado"
+
+    def actualizar(self, hash_contenido, titulo=None, autores=None, año=None):
+        articulo = self.tabla.buscar(hash_contenido)
+        if not articulo:
+            return "Artículo no encontrado"
+
+        if titulo:
+            articulo.titulo = titulo
+        if autores:
+            articulo.autores = autores
+        if año:
+            articulo.año = int(año)
+
+        self.reescribir_archivo()
+        return "Artículo actualizado"
+
+    def todos_articulos(self):
+        return self.tabla.todos_valores()
+
+    def buscar_por_autor(self, autor):
+        resultado = []
+        for articulo in self.tabla.todos_valores():
+            if autor.lower() in articulo.autores.lower():
+                resultado.append(articulo)
+        return sorted(resultado, key=lambda a: a.autores.lower())
+
+    def buscar_por_año(self, año):
+        resultado = []
+        for articulo in self.tabla.todos_valores():
+            if articulo.año == año:
+                resultado.append(articulo)
+        return sorted(resultado, key=lambda a: a.titulo.lower())
+
+    def ordenar_por_titulo(self):
+        return sorted(self.tabla.todos_valores(), key=lambda a: a.titulo.lower())
+
+    def ordenar_por_autor(self):
+        return sorted(self.tabla.todos_valores(), key=lambda a: a.autores.lower())

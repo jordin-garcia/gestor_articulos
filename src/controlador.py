@@ -1,57 +1,59 @@
-import os
 from base_datos import BaseDatos
+from articulo import Articulo
+from manejo_archivos import ManejoArchivos
+
 
 class GestorArticulos:
     def __init__(self):
-        self.db = BaseDatos()
-        self.indice_autor = {}
-        self.indice_año = {}
-        self.actualizar_indices()
+        self.base_datos = BaseDatos()
+        self.manejo_archivos = ManejoArchivos()
 
-    def actualizar_indices(self):
-        self.indice_autor.clear()
-        self.indice_año.clear()
-        for nodo in self.db.tabla.tabla:
-            while nodo:
-                datos = nodo.valor
-                autor = datos["autor"]
-                año = datos["año"]
-                clave = nodo.clave
+    def agregar_articulo(self, titulo, autores, año, ruta_archivo):
+        try:
+            # Leer contenido del archivo
+            contenido = self.manejo_archivos.leer_archivo_texto(ruta_archivo)
 
-                self.indice_autor.setdefault(autor, []).append(clave)
-                self.indice_año.setdefault(año, []).append(clave)
-                nodo = nodo.siguiente
+            # Crear artículo
+            articulo = Articulo(titulo, autores, año, contenido)
 
-    def agregar_articulo(self, clave, titulo, autor, año, archivo):
-        if self.db.buscar(clave):
-            print(f"[Aviso] Ya existe un artículo con la clave '{clave}'")
-            return False
-        self.db.agregar(clave, titulo, autor, año, archivo)
-        self.actualizar_indices()
-        return True
+            # Guardar archivo con hash
+            hash_archivo, ruta_guardada = self.manejo_archivos.guardar_archivo_con_hash(
+                contenido
+            )
 
-    def eliminar_articulo(self, clave):
-        if self.db.eliminar(clave):
-            self.actualizar_indices()
-            return True
-        print(f"[Error] No se encontró el artículo con clave '{clave}'")
-        return False
+            # Insertar en base de datos
+            resultado = self.base_datos.insertar(articulo)
+            return resultado
 
-    def buscar_por_clave(self, clave):
-        return self.db.buscar(clave)
+        except Exception as e:
+            return f"Error al agregar artículo: {str(e)}"
+
+    def buscar_articulo(self, hash_contenido):
+        return self.base_datos.buscar(hash_contenido)
+
+    def eliminar_articulo(self, hash_contenido):
+        return self.base_datos.eliminar(hash_contenido)
+
+    def actualizar_articulo(self, hash_contenido, titulo=None, autores=None, año=None):
+        return self.base_datos.actualizar(hash_contenido, titulo, autores, año)
+
+    def listar_todos_articulos(self):
+        # Obtiene todos los artículos ordenados por título
+        return self.base_datos.ordenar_por_titulo()
 
     def buscar_por_autor(self, autor):
-        claves = self.indice_autor.get(autor, [])
-        return [self.db.buscar(clave) for clave in claves]
+        return self.base_datos.buscar_por_autor(autor)
 
     def buscar_por_año(self, año):
-        claves = self.indice_año.get(año, [])
-        return [self.db.buscar(clave) for clave in claves]
+        return self.base_datos.buscar_por_año(año)
 
-    def mostrar_todos(self):
-        articulos = []
-        for nodo in self.db.tabla.tabla:
-            while nodo:
-                articulos.append((nodo.clave, nodo.valor))
-                nodo = nodo.siguiente
-        return articulos
+    def obtener_contenido_archivo(self, hash_contenido):
+        articulo = self.base_datos.buscar(hash_contenido)
+        if not articulo:
+            return None
+
+        try:
+            ruta_archivo = f"data/archivos/{articulo.archivo}"
+            return self.manejo_archivos.leer_archivo_texto(ruta_archivo)
+        except Exception:
+            return None
